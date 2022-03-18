@@ -6,3 +6,8 @@ to use Firebase Cloud Firestore for signalling in a WebRTC video chat applicatio
 The solution to this codelab can be seen in the _solution_ branch.
 
 See http://webrtc.org for details.
+
+####Dev start
+```
+firebase emulators:start --only hosting
+```
