@@ -7,7 +7,12 @@ The solution to this codelab can be seen in the _solution_ branch.
 
 See http://webrtc.org for details.
 
-####Dev start
+#### Dev start
 ```
 firebase emulators:start --only hosting
+```
+
+#### Deploy to Firebase
+```angular2html
+firebase deploy
 ```
