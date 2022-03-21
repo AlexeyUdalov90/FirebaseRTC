@@ -59,9 +59,27 @@ async function createRoom() {
   registerPeerConnectionListeners();
 
   // Добавляем в соединение созданное RTCPeerConnection наш медиа (audio, video)
+  console.log('Add local stream media: ', localStream);
   localStream.getTracks().forEach(track => {
     peerConnection.addTrack(track, localStream);
   });
+
+  // Code for collecting ICE candidates below
+  // Создаем коллекцию callerCandidates в хранилище firebase
+  const callerCandidatesCollection = roomRef.collection('callerCandidates');
+
+  // Событие объекта RTCPeerConnection возникает, когда специальный объект ICE кандидата (RTCIceCandidate) сгенерирован RTCPeerConnection
+  // и готов для передачи удалённому пиру по каналу сигнализации.
+  // Сам сгенерированный объект кандидата передаётся в параметр вызванного обработчика.
+  peerConnection.addEventListener('icecandidate', event => {
+    if (!event.candidate) {
+      console.log('Got final candidate!');
+      return;
+    }
+    console.log('Got candidate: ', event.candidate);
+    callerCandidatesCollection.add(event.candidate.toJSON());
+  });
+  // Code for collecting ICE candidates above
 
   // Code for creating a room below
   // Метод createOffer() интерфейса RTCPeerConnection инициирует создание предложения SDP с целью запуска нового соединения WebRTC
@@ -69,6 +87,7 @@ async function createRoom() {
   // кодеке и параметрах, поддерживаемых браузером, а также о любых кандидатах, уже собранных агентом ICE для отправки по сигнальному каналу
   // потенциальному одноранговому узлу. запросить соединение или обновить конфигурацию существующего соединения.
   const offer = await peerConnection.createOffer();
+  console.log('Create offer: ', offer);
   // Метод setLocalDescription() RTCPeerConnection изменяет локальное описание, связанное с соединением.
   // Это описание определяет свойства локального конца соединения, включая формат носителя.
   // Метод принимает единственный параметр — описание сеанса — и возвращает обещание, которое выполняется после изменения описания асинхронно.
@@ -87,22 +106,6 @@ async function createRoom() {
   document.querySelector('#currentRoom').innerText = `Current room is ${roomId} - You are the caller!`
   // Code for creating a room above
 
-  // Code for collecting ICE candidates below
-  // Создаем коллекцию callerCandidates в хранилище firebase
-  const callerCandidatesCollection = roomRef.collection('callerCandidates');
-
-  // Событие объекта RTCPeerConnection возникает, когда специальный объект ICE кандидата (RTCIceCandidate) сгенерирован RTCPeerConnection
-  // и готов для передачи удалённому пиру по каналу сигнализации.
-  // Сам сгенерированный объект кандидата передаётся в параметр вызванного обработчика.
-  peerConnection.addEventListener('icecandidate', event => {
-    if (!event.candidate) {
-      console.log('Got final candidate!');
-      return;
-    }
-    console.log('Got candidate: ', event.candidate);
-    callerCandidatesCollection.add(event.candidate.toJSON());
-  });
-  // Code for collecting ICE candidates above
   // Событие track возникает после того, как новый объект трека был добавлен в один из объектов интерфейса RTCRtpReceiver (en-US),
   // которые входят в состав соединения.
   peerConnection.addEventListener('track', event => {
@@ -115,11 +118,10 @@ async function createRoom() {
   });
 
   // Listening for remote session description below
-
   roomRef.onSnapshot(async snapshot => {
     const data = snapshot.data();
     if (!peerConnection.currentRemoteDescription && data && data.answer) {
-      console.log('Got remote description: ', data.answer);
+      console.log('Got remote description (answer): ', data.answer);
       // Интерфейс RTCSessionDescription описывает один конец соединения — или потенциальное соединение — и то, как он настроен.
       // Каждое RTCSessionDescription состоит из типа описания, указывающего, какую часть процесса согласования предложения/ответа
       // оно описывает, и из дескриптора сеанса SDP.
@@ -186,6 +188,7 @@ async function joinRoomById(roomId) {
 
     registerPeerConnectionListeners();
 
+    console.log('Add local stream media: ', localStream);
     localStream.getTracks().forEach(track => {
       peerConnection.addTrack(track, localStream);
     });
@@ -214,7 +217,9 @@ async function joinRoomById(roomId) {
     // Code for creating SDP answer below
     const offer = roomSnapshot.data().offer;
     await peerConnection.setRemoteDescription(offer);
+    console.log('Add offer: ', offer)
     const answer = await peerConnection.createAnswer();
+    console.log('Create answer: ', answer)
     await peerConnection.setLocalDescription(answer);
 
     const roomWithAnswer = {
@@ -281,18 +286,22 @@ async function hangUp(e) {
 }
 
 function registerPeerConnectionListeners() {
+  // Событие icegatheringstatechange отправляется обработчику событий onicegatheringstatechange в RTCPeerConnection при изменении состояния процесса сбора кандидатов ICE. Это означает, что значение свойства iceGatheringState соединения изменилось.
   peerConnection.addEventListener('icegatheringstatechange', () => {
     console.log(`ICE gathering state changed: ${peerConnection.iceGatheringState}`);
   });
 
+  // Событие connectionstatechange отправляется обработчику событий onconnectionstatechange объекта RTCPeerConnection после добавления новой дорожки в RTCRtpReceiver, который является частью соединения.
   peerConnection.addEventListener('connectionstatechange', () => {
     console.log(`Connection state change: ${peerConnection.connectionState}`);
   });
 
+  // Событие signalingstatechange отправляется в RTCPeerConnection, чтобы уведомить его об изменении его состояния сигнализации, как указано в свойстве signalingState
   peerConnection.addEventListener('signalingstatechange', () => {
     console.log(`Signaling state change: ${peerConnection.signalingState}`);
   });
 
+  // Событие iceconnectionstatechange отправляется объекту RTCPeerConnection каждый раз, когда состояние соединения ICE изменяется в процессе согласования. Новое состояние подключения ICE доступно в свойстве iceConnectionState
   peerConnection.addEventListener('iceconnectionstatechange ', () => {
     console.log(`ICE connection state change: ${peerConnection.iceConnectionState}`);
   });
